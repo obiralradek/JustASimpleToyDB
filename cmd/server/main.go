@@ -12,6 +12,7 @@ import (
 )
 
 func handleConnection(conn net.Conn, qp *processor.QueryProcessor) {
+	log.Println("client connected")
 	defer conn.Close()
 	reader := bufio.NewReader(conn)
 	writer := bufio.NewWriter(conn)
