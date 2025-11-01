@@ -81,14 +81,44 @@ func Tokenize(input string) ([]Token, error) {
 		case ch == '\'':
 			i++
 			start := i
-			for i < len(input) && input[i] != '\'' {
+			for i < len(input) {
+				if input[i] == '\'' {
+					if i+1 < len(input) && input[i+1] == '\'' {
+						i += 2
+						continue
+					}
+					break
+				}
 				i++
 			}
 			if i >= len(input) {
 				return nil, fmt.Errorf("unterminated string literal")
 			}
-			tokens = append(tokens, Token{Type: STRING, Literal: input[start:i]})
-			i++ // skip closing '
+			literal := input[start:i]
+			literal = strings.ReplaceAll(literal, "''", "'")
+			tokens = append(tokens, Token{Type: STRING, Literal: literal})
+			i++
+
+		case ch == '"':
+			i++
+			start := i
+			for i < len(input) {
+				if input[i] == '"' {
+					if i+1 < len(input) && input[i+1] == '"' {
+						i += 2
+						continue
+					}
+					break
+				}
+				i++
+			}
+			if i >= len(input) {
+				return nil, fmt.Errorf("unterminated quoted identifier")
+			}
+			literal := input[start:i]
+			literal = strings.ReplaceAll(literal, `""`, `"`)
+			tokens = append(tokens, Token{Type: STRING, Literal: literal})
+			i++
 
 		case strings.ContainsRune("(),;*", rune(ch)):
 			tokens = append(tokens, Token{Type: SYMBOL, Literal: string(ch)})
