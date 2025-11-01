@@ -8,7 +8,7 @@ import (
 
 const (
 	PageSize    = 16 * 1024 // 16KB
-	pageHdrSize = 16        // 8 (id) + 4 (dataEnd) + 4 (slotCount)
+	pageHdrSize = 20        // 8 (id) + 4 (dataEnd) + 4 (slotCount) + 2 (flags) + 2 (padding)
 	slotEntrySz = 8         // 4 (offset) + 4 (length)
 )
 
@@ -46,6 +46,13 @@ func (p *Page) setSlotCount(v uint32) {
 	binary.LittleEndian.PutUint32(p.Data[12:16], v)
 }
 
+func (p *Page) getFlags() uint16 {
+	return binary.LittleEndian.Uint16(p.Data[16:18])
+}
+func (p *Page) setFlags(v uint16) {
+	binary.LittleEndian.PutUint16(p.Data[16:18], v)
+}
+
 // Available free bytes for storing payload + one new slot entry
 func (p *Page) availableSpace() int {
 	dataEnd := int(p.getDataEnd())
@@ -62,45 +69,16 @@ func (p *Page) CanInsert(n int) bool {
 
 // InsertRecord writes payload into page and creates new slot entry, returns slot index (0-based)
 func (p *Page) InsertRecord(payload []byte) (int, error) {
-	n := len(payload)
-	if !p.CanInsert(n) {
-		return -1, fmt.Errorf("not enough space in page %d: need %d, have %d", p.ID, n+slotEntrySz, p.availableSpace())
-	}
-
-	dataEnd := int(p.getDataEnd())
-	// write payload at dataEnd
-	copy(p.Data[dataEnd:dataEnd+n], payload)
-	newDataEnd := dataEnd + n
-	p.setDataEnd(uint32(newDataEnd))
-
-	// compute slot position (slot entries stored from end backwards)
-	slotCount := int(p.getSlotCount())
-	slotOffset := PageSize - ((slotCount + 1) * slotEntrySz)
-
-	// write slot entry: offset (uint32), length (uint32)
-	binary.LittleEndian.PutUint32(p.Data[slotOffset:slotOffset+4], uint32(dataEnd))
-	binary.LittleEndian.PutUint32(p.Data[slotOffset+4:slotOffset+8], uint32(n))
-
-	p.setSlotCount(uint32(slotCount + 1))
-	return slotCount, nil
+	return p.InsertTouple(payload, 0, TupleFlagNormal)
 }
 
 // GetRecord returns record bytes for given slot index (0-based)
 func (p *Page) GetRecord(slotIdx int) ([]byte, error) {
-	slotCount := int(p.getSlotCount())
-	if slotIdx < 0 || slotIdx >= slotCount {
-		return nil, fmt.Errorf("slot index out of range")
+	t, err := p.GetTuple(slotIdx)
+	if err != nil {
+		return nil, err
 	}
-	slotOffset := PageSize - ((slotIdx + 1) * slotEntrySz)
-	offset := binary.LittleEndian.Uint32(p.Data[slotOffset : slotOffset+4])
-	length := binary.LittleEndian.Uint32(p.Data[slotOffset+4 : slotOffset+8])
-	if int(offset)+int(length) > PageSize {
-		return nil, fmt.Errorf("corrupt slot (out of bounds)")
-	}
-	// copy to new slice to avoid exposing page backing buffer
-	out := make([]byte, length)
-	copy(out, p.Data[offset:uint32(offset)+length])
-	return out, nil
+	return t.Data, nil
 }
 
 // String yields human friendly representation
