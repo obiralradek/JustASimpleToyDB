@@ -2,49 +2,35 @@ package main
 
 import (
 	"fmt"
-	"log"
 
 	"justasimpletoydb/internal/catalog"
 	"justasimpletoydb/internal/engine"
+	"justasimpletoydb/internal/executor"
 )
 
 func main() {
-	fmt.Println("JustASimpleToyDB starting...")
+	fmt.Println("Starting JustASimpleToyDB...")
 
-	db := engine.NewEngine("data")
+	e := engine.NewEngine("data")
+	exec := executor.NewExecutor(e)
 
-	usersSchema := &catalog.TableSchema{
+	// CREATE TABLE
+	create := &executor.CreateTableStmt{
 		Name: "users",
 		Columns: []catalog.Column{
 			{Name: "id", Type: catalog.TypeInt},
 			{Name: "name", Type: catalog.TypeText},
 		},
 	}
+	_ = create.Execute(exec)
 
-	if err := db.CreateTable(usersSchema); err != nil {
-		log.Printf("Create table: %v (might already exist)", err)
-	}
+	// INSERT rows
+	_ = (&executor.InsertStmt{Table: "users", Values: []any{1, "Alice"}}).Execute(exec)
+	_ = (&executor.InsertStmt{Table: "users", Values: []any{2, "Bob"}}).Execute(exec)
+	_ = (&executor.InsertStmt{Table: "users", Values: []any{3, "Radek"}}).Execute(exec)
 
-	rows := [][]any{
-		{1, "alice"},
-		{2, "bob"},
-		{3, "radek"},
-	}
+	// SELECT *
+	_ = (&executor.SelectStmt{Table: "users"}).Execute(exec)
 
-	for i, r := range rows {
-		if err := db.InsertRow("users", r); err != nil {
-			log.Fatalf("insert %d: %v", i, err)
-		}
-		fmt.Printf("Inserted row %d (len=%d)\n", i, len(r))
-	}
-
-	all, err := db.SelectAll("users")
-	if err != nil {
-		log.Fatalf("read all: %v", err)
-	}
-
-	fmt.Printf("\nRead %d rows back:\n", len(all))
-	for _, r := range all {
-		fmt.Printf("Decoded row: %+v\n", r)
-	}
+	fmt.Println("Done.")
 }

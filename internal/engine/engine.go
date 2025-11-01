@@ -61,3 +61,19 @@ func (e *Engine) SelectAll(tableName string) ([]any, error) {
 	defer table.Close()
 	return table.ReadAllRows()
 }
+
+func (e *Engine) GetTable(name string) (*storage.Table, error) {
+	schema, err := e.Catalog.GetTable(name)
+	if err != nil {
+		return nil, fmt.Errorf("table %s not found in catalog: %w", name, err)
+	}
+
+	tablePath := filepath.Join(e.DataDir, name+".tbl")
+
+	table, err := storage.NewTable(name, tablePath, schema)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open table %s: %w", name, err)
+	}
+
+	return table, nil
+}
