@@ -4,16 +4,23 @@ This is a practice project for designing and creating custom DB from scratch
 
 ## How to run
 
-Run the application with
+Run the server with
 ```
-go run cmd/justasimpletoydb/main.go
+go run cmd/server/main.go
 ```
-This starts REPL session with the running application which will interpret and run your SQL
+
+Run the REPL session with
+```
+go run cmd/repl/main.go
+```
+With this you create a connection to the server where you can run commands like...
+
 ```
 CREATE TABLE animals (id INT, name TEXT);
 INSERT INTO animals VALUES (1, 'FROG');
 INSERT INTO animals VALUES (2, 'SNAKE');
 SELECT * FROM animals;
+SELECT name FROM animals;
 ```
 
 
