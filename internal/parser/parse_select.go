@@ -52,8 +52,14 @@ func (p *Parser) ParseSelect() (*executor.SelectStmt, error) {
 		p.eat()
 	}
 
+	cond, err := p.parseWhere()
+	if err != nil {
+		return nil, err
+	}
+
 	return &executor.SelectStmt{
 		Table:   tableTok.Literal,
 		Columns: columns,
+		Where:   cond,
 	}, nil
 }

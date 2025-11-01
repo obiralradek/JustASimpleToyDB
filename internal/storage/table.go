@@ -135,3 +135,12 @@ func (t *Table) ResolveColumns(requested []string) ([]int, []string, error) {
 	}
 	return idxs, requested, nil
 }
+
+func (t *Table) ResolveColumn(column string) (int, error) {
+	for j, col := range t.schema.Columns {
+		if col.Name == column {
+			return j, nil
+		}
+	}
+	return 0, fmt.Errorf("unknown column %q", column)
+}

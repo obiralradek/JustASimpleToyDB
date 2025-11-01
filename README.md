@@ -21,6 +21,7 @@ INSERT INTO animals VALUES (1, 'FROG');
 INSERT INTO animals VALUES (2, 'SNAKE');
 SELECT * FROM animals;
 SELECT name FROM animals;
+SELECT id FROM animals WHERE name = "FROG";
 ```
 
 

@@ -46,7 +46,7 @@ type Token struct {
 
 var keywords = map[string]struct{}{
 	"CREATE": {}, "TABLE": {}, "INSERT": {}, "INTO": {}, "VALUES": {},
-	"SELECT": {}, "FROM": {}, "INT": {}, "TEXT": {},
+	"SELECT": {}, "FROM": {}, "INT": {}, "TEXT": {}, "WHERE": {},
 }
 
 func Tokenize(input string) ([]Token, error) {
@@ -120,7 +120,7 @@ func Tokenize(input string) ([]Token, error) {
 			tokens = append(tokens, Token{Type: STRING, Literal: literal})
 			i++
 
-		case strings.ContainsRune("(),;*", rune(ch)):
+		case strings.ContainsRune("(),;*=", rune(ch)):
 			tokens = append(tokens, Token{Type: SYMBOL, Literal: string(ch)})
 			i++
 

@@ -4,9 +4,16 @@ import (
 	"fmt"
 )
 
+type Condition struct {
+	Column   string
+	Operator string
+	Value    any
+}
+
 type SelectStmt struct {
 	Table   string
 	Columns []string
+	Where   *Condition // nil if no WHERE
 }
 
 func (s *SelectStmt) Execute(ex *Executor) (*ExecResult, error) {
@@ -23,10 +30,26 @@ func (s *SelectStmt) Execute(ex *Executor) (*ExecResult, error) {
 
 	result := make([][]any, 0, len(rows))
 	for _, row := range rows {
+
+		// Handle conditions
+		include := true
+		if s.Where != nil {
+			idx, err := table.ResolveColumn(s.Where.Column)
+			if err != nil {
+				return nil, err
+			}
+			include = row[idx] == s.Where.Value
+		}
+		if !include {
+			continue
+		}
+
+		// Handle selecting specific columns
 		selected := make([]any, len(colIndexes))
 		for i, idx := range colIndexes {
 			selected[i] = row[idx]
 		}
+
 		result = append(result, selected)
 	}
 	return &ExecResult{
