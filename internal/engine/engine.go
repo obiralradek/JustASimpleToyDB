@@ -34,34 +34,6 @@ func (e *Engine) CreateTable(schema *catalog.TableSchema) error {
 	return nil
 }
 
-func (e *Engine) InsertRow(tableName string, values []any) error {
-	schema, err := e.Catalog.GetTable(tableName)
-	if err != nil {
-		return err
-	}
-	tablePath := filepath.Join(e.DataDir, schema.Name+".tbl")
-	table, err := storage.NewTable(schema.Name, tablePath, schema)
-	if err != nil {
-		return err
-	}
-	defer table.Close()
-	return table.InsertRow(values)
-}
-
-func (e *Engine) SelectAll(tableName string) ([][]any, error) {
-	schema, err := e.Catalog.GetTable(tableName)
-	if err != nil {
-		return nil, err
-	}
-	tablePath := filepath.Join(e.DataDir, schema.Name+".tbl")
-	table, err := storage.NewTable(schema.Name, tablePath, schema)
-	if err != nil {
-		return nil, err
-	}
-	defer table.Close()
-	return table.ReadAllRows()
-}
-
 func (e *Engine) GetTable(name string) (*storage.Table, error) {
 	schema, err := e.Catalog.GetTable(name)
 	if err != nil {
