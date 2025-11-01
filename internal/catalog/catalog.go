@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 )
 
 type Catalog struct {
@@ -31,19 +32,36 @@ func (c *Catalog) load() {
 	_ = json.Unmarshal(data, &c.Tables)
 }
 
-func (c *Catalog) save() {
-	data, _ := json.MarshalIndent(c.Tables, "", "  ")
-	_ = os.WriteFile(c.path, data, 0644)
+func (c *Catalog) save() error {
+	data, err := json.MarshalIndent(c.Tables, "", "  ")
+	if err != nil {
+		return err
+	}
+	dir := filepath.Dir(c.path)
+	_ = os.MkdirAll(dir, 0755)
+	return os.WriteFile(c.path, data, 0644)
 }
 
-func (c *Catalog) CreateTable(schema *TableSchema) {
+func (c *Catalog) CreateTable(schema *TableSchema) error {
 	if _, exists := c.Tables[schema.Name]; exists {
-		panic(fmt.Sprintf("table %s already exists", schema.Name))
+		return fmt.Errorf("table %s already exists", schema.Name)
 	}
 	c.Tables[schema.Name] = schema
-	c.save()
+	return c.save()
 }
 
-func (c *Catalog) GetTable(name string) *TableSchema {
-	return c.Tables[name]
+func (c *Catalog) GetTable(name string) (*TableSchema, error) {
+	schema, ok := c.Tables[name]
+	if !ok {
+		return nil, fmt.Errorf("table %s not found", name)
+	}
+	return schema, nil
+}
+
+func (c *Catalog) ListTables() []string {
+	names := make([]string, 0, len(c.Tables))
+	for name := range c.Tables {
+		names = append(names, name)
+	}
+	return names
 }

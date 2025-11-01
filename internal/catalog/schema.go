@@ -16,3 +16,11 @@ type TableSchema struct {
 	Name    string
 	Columns []Column
 }
+
+func (s *TableSchema) ColumnNames() []string {
+	names := make([]string, len(s.Columns))
+	for i, c := range s.Columns {
+		names[i] = c.Name
+	}
+	return names
+}
