@@ -1,9 +1,13 @@
 package executor
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 type SelectStmt struct {
-	Table string
+	Table   string
+	Columns []string
 }
 
 func (s *SelectStmt) Execute(ex *Executor) error {
@@ -16,10 +20,21 @@ func (s *SelectStmt) Execute(ex *Executor) error {
 	if err != nil {
 		return err
 	}
+	colIndexes, colNames, err := table.ResolveColumns(s.Columns)
 
 	fmt.Printf("Results from %s:\n", s.Table)
+	fmt.Println(strings.Join(colNames, " | "))
+
 	for _, row := range rows {
-		fmt.Println(row)
+		r := row.([]any)
+		selected := make([]any, len(colIndexes))
+		for i, idx := range colIndexes {
+			if idx < len(r) {
+				selected[i] = r[idx]
+			}
+		}
+		fmt.Println(selected)
 	}
+
 	return nil
 }

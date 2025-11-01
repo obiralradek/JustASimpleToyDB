@@ -105,3 +105,33 @@ func (t *Table) ReadAllRows() ([]any, error) {
 	}
 	return out, nil
 }
+
+func (t *Table) ResolveColumns(requested []string) ([]int, []string, error) {
+	// If one requested that is * resolve into all columns
+	if len(requested) == 1 && requested[0] == "*" {
+		idxs := make([]int, len(t.schema.Columns))
+		names := make([]string, len(t.schema.Columns))
+		for i, c := range t.schema.Columns {
+			idxs[i] = i
+			names[i] = c.Name
+		}
+		return idxs, names, nil
+	}
+
+	// Otherwise, match requested names
+	idxs := make([]int, len(requested))
+	for i, name := range requested {
+		found := false
+		for j, col := range t.schema.Columns {
+			if col.Name == name {
+				idxs[i] = j
+				found = true
+				break
+			}
+		}
+		if !found {
+			return nil, nil, fmt.Errorf("unknown column %q", name)
+		}
+	}
+	return idxs, requested, nil
+}
