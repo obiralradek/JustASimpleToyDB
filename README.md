@@ -26,7 +26,10 @@ SELECT name FROM animals;
 
 ## Design
 
+There are couple of directions I follow when designing this
 - Postgres-like
 - 16kB pages
 - multi-file storage
 - one database per application stored at `data/` with `catalog.json` deciding the schema of it and individual `.tbl` files storing the data of each table
+
+Each statement (like `INSERT` or `SELECT`) has its own entry in `executor/` and `parser/`, former defining the database execution logic and latter defining the way we collect tokens for the execution and validity of the statement.
