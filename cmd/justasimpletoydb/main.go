@@ -3,9 +3,9 @@ package main
 import (
 	"fmt"
 
-	"justasimpletoydb/internal/catalog"
 	"justasimpletoydb/internal/engine"
 	"justasimpletoydb/internal/executor"
+	"justasimpletoydb/internal/processor"
 )
 
 func main() {
@@ -13,24 +13,15 @@ func main() {
 
 	e := engine.NewEngine("data")
 	exec := executor.NewExecutor(e)
-
-	// CREATE TABLE
-	create := &executor.CreateTableStmt{
-		Name: "users",
-		Columns: []catalog.Column{
-			{Name: "id", Type: catalog.TypeInt},
-			{Name: "name", Type: catalog.TypeText},
-		},
+	processor := processor.QueryProcessor{
+		Exec: exec,
 	}
-	_ = create.Execute(exec)
 
-	// INSERT rows
-	_ = (&executor.InsertStmt{Table: "users", Values: []any{1, "Alice"}}).Execute(exec)
-	_ = (&executor.InsertStmt{Table: "users", Values: []any{2, "Bob"}}).Execute(exec)
-	_ = (&executor.InsertStmt{Table: "users", Values: []any{3, "Radek"}}).Execute(exec)
-
-	// SELECT *
-	_ = (&executor.SelectStmt{Table: "users"}).Execute(exec)
+	_ = processor.RunQuery("CREATE TABLE users (id INT, name TEXT, surname TEXT);")
+	_ = processor.RunQuery("INSERT INTO users VALUES (1, 'Alice', 'Surname');")
+	_ = processor.RunQuery("INSERT INTO users VALUES (2, 'Bob', 'Surname');")
+	_ = processor.RunQuery("INSERT INTO users VALUES (3, 'Radek', 'Surname');")
+	_ = processor.RunQuery("SELECT * FROM users;")
 
 	fmt.Println("Done.")
 }
