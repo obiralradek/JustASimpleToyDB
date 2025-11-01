@@ -30,8 +30,9 @@ func (s *SelectStmt) Execute(ex *Executor) (*ExecResult, error) {
 		result = append(result, selected)
 	}
 	return &ExecResult{
-		Columns: colNames,
-		Rows:    result,
-		Message: "OK",
+		Columns:  colNames,
+		Rows:     result,
+		Affected: 0,
+		Message:  "OK",
 	}, nil
 }

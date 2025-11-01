@@ -17,6 +17,7 @@ func (s *InsertStmt) Execute(ex *Executor) (*ExecResult, error) {
 		return nil, err
 	}
 	return &ExecResult{
-		Message: "OK",
+		Message:  "OK",
+		Affected: 1,
 	}, nil
 }
