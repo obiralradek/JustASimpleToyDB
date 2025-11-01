@@ -31,13 +31,15 @@ func handleConnection(conn net.Conn, qp *processor.QueryProcessor) {
 			return
 		}
 
-		err = qp.RunQuery(line)
+		result, err := qp.RunQuery(line)
 		if err != nil {
 			writer.WriteString(fmt.Sprintf("parse error: %v\n", err))
 			writer.Flush()
 			continue
 		} else {
-			writer.WriteString("OK\n")
+			data, _ := result.ToJSON()
+			writer.Write(data)
+			writer.WriteString("\n")
 		}
 		writer.Flush()
 	}

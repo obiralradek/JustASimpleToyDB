@@ -7,10 +7,16 @@ type CreateTableStmt struct {
 	Columns []catalog.Column
 }
 
-func (s *CreateTableStmt) Execute(ex *Executor) error {
+func (s *CreateTableStmt) Execute(ex *Executor) (*ExecResult, error) {
 	schema := &catalog.TableSchema{
 		Name:    s.Name,
 		Columns: s.Columns,
 	}
-	return ex.engine.CreateTable(schema)
+	err := ex.engine.CreateTable(schema)
+	if err != nil {
+		return nil, err
+	}
+	return &ExecResult{
+		Message: "OK",
+	}, nil
 }

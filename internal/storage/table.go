@@ -78,7 +78,7 @@ func (t *Table) InsertRow(values []any) error {
 }
 
 // ReadAllRows iterates all pages and returns all rows in order
-func (t *Table) ReadAllRows() ([]any, error) {
+func (t *Table) ReadAllRows() ([][]any, error) {
 	numPages, err := t.pager.NumPages()
 	if err != nil {
 		// if file doesn't exist or empty, return empty result
@@ -87,7 +87,7 @@ func (t *Table) ReadAllRows() ([]any, error) {
 		}
 		return nil, err
 	}
-	out := make([]any, 0, 64)
+	out := make([][]any, 0, 64)
 	for i := uint64(0); i < numPages; i++ {
 		pg, err := t.pager.ReadPage(i)
 		if err != nil {

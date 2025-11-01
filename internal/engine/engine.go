@@ -48,7 +48,7 @@ func (e *Engine) InsertRow(tableName string, values []any) error {
 	return table.InsertRow(values)
 }
 
-func (e *Engine) SelectAll(tableName string) ([]any, error) {
+func (e *Engine) SelectAll(tableName string) ([][]any, error) {
 	schema, err := e.Catalog.GetTable(tableName)
 	if err != nil {
 		return nil, err

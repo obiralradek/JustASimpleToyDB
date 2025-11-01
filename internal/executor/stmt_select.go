@@ -2,7 +2,6 @@ package executor
 
 import (
 	"fmt"
-	"strings"
 )
 
 type SelectStmt struct {
@@ -10,31 +9,29 @@ type SelectStmt struct {
 	Columns []string
 }
 
-func (s *SelectStmt) Execute(ex *Executor) error {
+func (s *SelectStmt) Execute(ex *Executor) (*ExecResult, error) {
 	table, err := ex.engine.GetTable(s.Table)
 	if err != nil {
-		return fmt.Errorf("table not found: %s", s.Table)
+		return nil, fmt.Errorf("table not found: %s", s.Table)
 	}
 
 	rows, err := table.ReadAllRows()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	colIndexes, colNames, err := table.ResolveColumns(s.Columns)
 
-	fmt.Printf("Results from %s:\n", s.Table)
-	fmt.Println(strings.Join(colNames, " | "))
-
+	result := make([][]any, 0, len(rows))
 	for _, row := range rows {
-		r := row.([]any)
 		selected := make([]any, len(colIndexes))
 		for i, idx := range colIndexes {
-			if idx < len(r) {
-				selected[i] = r[idx]
-			}
+			selected[i] = row[idx]
 		}
-		fmt.Println(selected)
+		result = append(result, selected)
 	}
-
-	return nil
+	return &ExecResult{
+		Columns: colNames,
+		Rows:    result,
+		Message: "OK",
+	}, nil
 }

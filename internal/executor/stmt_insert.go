@@ -7,10 +7,16 @@ type InsertStmt struct {
 	Values []any
 }
 
-func (s *InsertStmt) Execute(ex *Executor) error {
+func (s *InsertStmt) Execute(ex *Executor) (*ExecResult, error) {
 	table, err := ex.engine.GetTable(s.Table)
 	if err != nil {
-		return fmt.Errorf("table not found: %s", s.Table)
+		return nil, fmt.Errorf("table not found: %s", s.Table)
 	}
-	return table.InsertRow(s.Values)
+	err = table.InsertRow(s.Values)
+	if err != nil {
+		return nil, err
+	}
+	return &ExecResult{
+		Message: "OK",
+	}, nil
 }
