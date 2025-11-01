@@ -52,7 +52,7 @@ func (p *Parser) eat() Token {
 func (p *Parser) expect(t TokenType, lit string) error {
 	cur := p.cur()
 	if cur.Type != t || (lit != "" && strings.ToUpper(cur.Literal) != lit) {
-		return fmt.Errorf("expected %d '%s', got %d '%s'", t, lit, cur.Type, cur.Literal)
+		return fmt.Errorf("expected %s '%s', got %s '%s'", t.String(), lit, cur.Type.String(), cur.Literal)
 	}
 	p.eat()
 	return nil

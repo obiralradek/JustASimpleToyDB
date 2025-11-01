@@ -15,8 +15,29 @@ const (
 	INT     // integer literals
 	STRING  // string literals
 	KEYWORD // SQL keyword
-	SYMBOL  // punctuation like (, ), ;
+	SYMBOL  // punctuation like (, ), ; *
 )
+
+func (t TokenType) String() string {
+	switch t {
+	case ILLEGAL:
+		return "ILLEGAL"
+	case EOF:
+		return "EOF"
+	case IDENT:
+		return "IDENT"
+	case INT:
+		return "INT"
+	case STRING:
+		return "STRING"
+	case KEYWORD:
+		return "KEYWORD"
+	case SYMBOL:
+		return "SYMBOL"
+	default:
+		return fmt.Sprintf("UNKNOWN(%d)", int(t))
+	}
+}
 
 type Token struct {
 	Type    TokenType
