@@ -4,11 +4,22 @@ import (
 	"fmt"
 	"log"
 
+	"justasimpletoydb/internal/catalog"
 	"justasimpletoydb/internal/storage"
 )
 
 func main() {
-	fmt.Println("JustASimpleToyDB starting")
+	fmt.Println("JustASimpleToyDB starting...")
+
+	schema := catalog.NewCatalog("data/catalog.json")
+
+	schema.CreateTable(&catalog.TableSchema{
+		Name: "users",
+		Columns: []catalog.Column{
+			{Name: "id", Type: catalog.TypeInt},
+			{Name: "name", Type: catalog.TypeText},
+		},
+	})
 
 	table, err := storage.NewTable("test_table", "data/test_table.tbl")
 	if err != nil {

@@ -11,3 +11,4 @@ This is a practice project for designing and creating custom DB from scratch
 - Postgres-like
 - 16kB pages
 - multi-file storage
+- one database per application stoted at `data/` with `catalog.json` deciding the schema of it and individual `.tbl` files storing the data of each table
