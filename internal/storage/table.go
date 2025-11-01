@@ -3,17 +3,20 @@ package storage
 import (
 	"fmt"
 	"io"
+	"justasimpletoydb/internal/catalog"
+	"justasimpletoydb/internal/engine/rowcodec"
 )
 
 type Table struct {
-	name  string
-	pager *Pager
+	name   string
+	schema *catalog.TableSchema
+	pager  *Pager
 }
 
 // NewTable opens/creates a table file and returns Table
-func NewTable(name string, path string) (*Table, error) {
+func NewTable(name string, path string, schema *catalog.TableSchema) (*Table, error) {
 	p := NewPager(path)
-	return &Table{name: name, pager: p}, nil
+	return &Table{name: name, pager: p, schema: schema}, nil
 }
 
 // close underlying pager
@@ -22,7 +25,8 @@ func (t *Table) Close() error {
 }
 
 // InsertRow appends a row into last page or allocates a new page
-func (t *Table) InsertRow(data []byte) error {
+func (t *Table) InsertRow(values []any) error {
+	data, err := rowcodec.EncodeRow(t.schema, values)
 	numPages, err := t.pager.NumPages()
 	if err != nil {
 		return err
@@ -74,7 +78,7 @@ func (t *Table) InsertRow(data []byte) error {
 }
 
 // ReadAllRows iterates all pages and returns all rows in order
-func (t *Table) ReadAllRows() ([][]byte, error) {
+func (t *Table) ReadAllRows() ([]any, error) {
 	numPages, err := t.pager.NumPages()
 	if err != nil {
 		// if file doesn't exist or empty, return empty result
@@ -83,7 +87,7 @@ func (t *Table) ReadAllRows() ([][]byte, error) {
 		}
 		return nil, err
 	}
-	out := make([][]byte, 0, 64)
+	out := make([]any, 0, 64)
 	for i := uint64(0); i < numPages; i++ {
 		pg, err := t.pager.ReadPage(i)
 		if err != nil {
@@ -95,8 +99,8 @@ func (t *Table) ReadAllRows() ([][]byte, error) {
 			if err != nil {
 				return nil, err
 			}
-			// copy already returned by GetRecord
-			out = append(out, rec)
+			data, err := rowcodec.DecodeRow(t.schema, rec)
+			out = append(out, data)
 		}
 	}
 	return out, nil

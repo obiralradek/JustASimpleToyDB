@@ -13,24 +13,26 @@ func main() {
 
 	schema := catalog.NewCatalog("data/catalog.json")
 
-	schema.CreateTable(&catalog.TableSchema{
+	test_table_schema := catalog.TableSchema{
 		Name: "users",
 		Columns: []catalog.Column{
 			{Name: "id", Type: catalog.TypeInt},
 			{Name: "name", Type: catalog.TypeText},
 		},
-	})
+	}
 
-	table, err := storage.NewTable("test_table", "data/test_table.tbl")
+	schema.CreateTable(&test_table_schema)
+
+	table, err := storage.NewTable("test_table", "data/test_table.tbl", &test_table_schema)
 	if err != nil {
 		log.Fatalf("new table: %v", err)
 	}
 	defer table.Close()
 
-	rows := [][]byte{
-		[]byte("hello world"),
-		[]byte("hello world two"),
-		[]byte("different hello world"),
+	rows := [][]any{
+		[]any{1, "hello"},
+		[]any{2, "world"},
+		[]any{3, "test"},
 	}
 
 	for i, r := range rows {
@@ -45,7 +47,7 @@ func main() {
 		log.Fatalf("read all: %v", err)
 	}
 	fmt.Printf("\nRead %d rows back:\n", len(all))
-	for i, r := range all {
-		fmt.Printf(" %d: %q\n", i, string(r))
+	for _, r := range all {
+		fmt.Printf("Decoded row: %+v\n", r)
 	}
 }
