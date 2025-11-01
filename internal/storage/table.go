@@ -25,23 +25,26 @@ func (t *Table) Close() error {
 }
 
 // InsertRow appends a row into last page or allocates a new page
-func (t *Table) InsertRow(values []any) error {
+func (t *Table) InsertRow(values []any) (*TID, error) {
 	data, err := rowcodec.EncodeRow(t.schema, values)
+	if err != nil {
+		return nil, err
+	}
+
 	numPages, err := t.pager.NumPages()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	var page *Page
-	// if no pages yet, create first page
+	var pageID uint64
 	if numPages == 0 {
 		page = NewEmptyPage(0)
+		pageID = 0
 	} else {
-		// read last page
-		pageID := numPages - 1
+		pageID = numPages - 1
 		pg, err := t.pager.ReadPage(pageID)
 		if err != nil {
-			// if read fails because file shorter, create new
 			page = NewEmptyPage(pageID)
 		} else {
 			page = pg
@@ -50,31 +53,27 @@ func (t *Table) InsertRow(values []any) error {
 
 	// try to insert
 	if page.CanInsert(len(data)) {
-		_, err := page.InsertRecord(data)
+		slotID, err := page.InsertTouple(data, 0, TupleFlagNormal)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		// write page back
 		if err := t.pager.WritePage(page); err != nil {
-			return err
+			return nil, err
 		}
-		return nil
+		return &TID{PageID: pageID, SlotID: uint32(slotID)}, nil
 	}
 
-	// not enough space, allocate next page
-	newPageID := numPages
-	newPage := NewEmptyPage(newPageID)
-	if !newPage.CanInsert(len(data)) {
-		return fmt.Errorf("row too large for empty page (size %d, max %d)", len(data), PageSize-pageHdrSize-slotEntrySz)
-	}
-	_, err = newPage.InsertRecord(data)
+	// otherwise create new page
+	pageID = numPages
+	newPage := NewEmptyPage(pageID)
+	slotID, err := newPage.InsertTouple(data, 0, TupleFlagNormal)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if err := t.pager.WritePage(newPage); err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+	return &TID{PageID: pageID, SlotID: uint32(slotID)}, nil
 }
 
 // ReadAllRows iterates all pages and returns all rows in order
@@ -143,4 +142,12 @@ func (t *Table) ResolveColumn(column string) (int, error) {
 		}
 	}
 	return 0, fmt.Errorf("unknown column %q", column)
+}
+
+func (t *Table) GetTupleByTID(tid TID) (*Tuple, error) {
+	pg, err := t.pager.ReadPage(tid.PageID)
+	if err != nil {
+		return nil, err
+	}
+	return pg.GetTuple(int(tid.SlotID))
 }
