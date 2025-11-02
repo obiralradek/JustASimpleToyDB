@@ -46,7 +46,7 @@ type Token struct {
 
 var keywords = map[string]struct{}{
 	"CREATE": {}, "TABLE": {}, "INSERT": {}, "INTO": {}, "VALUES": {},
-	"SELECT": {}, "FROM": {}, "INT": {}, "TEXT": {}, "WHERE": {},
+	"SELECT": {}, "FROM": {}, "INT": {}, "TEXT": {}, "WHERE": {}, "INDEX": {}, "ON": {},
 }
 
 func Tokenize(input string) ([]Token, error) {

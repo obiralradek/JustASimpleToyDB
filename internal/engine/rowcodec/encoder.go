@@ -42,3 +42,33 @@ func EncodeRow(schema *catalog.TableSchema, values []any) ([]byte, error) {
 
 	return buf.Bytes(), nil
 }
+
+func EncodeValue(schema *catalog.TableSchema, columnIndex int, value any) ([]byte, error) {
+	col := schema.Columns[columnIndex]
+	buf := &bytes.Buffer{}
+
+	switch col.Type {
+	case catalog.TypeInt:
+		v, ok := value.(int)
+		if !ok {
+			return nil, fmt.Errorf("column %s expects int", col.Name)
+		}
+		tmp := make([]byte, 8)
+		binary.LittleEndian.PutUint64(tmp, uint64(v))
+		buf.Write(tmp)
+
+	case catalog.TypeText:
+		v, ok := value.(string)
+		if !ok {
+			return nil, fmt.Errorf("column %s expects string", col.Name)
+		}
+		length := uint32(len(v))
+		binary.Write(buf, binary.LittleEndian, length)
+		buf.WriteString(v)
+
+	default:
+		return nil, fmt.Errorf("unsupported type for column %s", col.Name)
+	}
+
+	return buf.Bytes(), nil
+}

@@ -27,7 +27,7 @@ func Parse(sql string) (executor.Statement, error) {
 
 	switch first {
 	case "CREATE":
-		return p.ParseCreateTable()
+		return p.ParseCreate()
 	case "INSERT":
 		return p.ParseInsert()
 	case "SELECT":

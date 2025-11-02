@@ -8,15 +8,21 @@ import (
 )
 
 type Table struct {
-	name   string
-	schema *catalog.TableSchema
-	pager  *Pager
+	name    string
+	schema  *catalog.TableSchema
+	pager   *Pager
+	Indexes map[string]*Index
 }
 
 // NewTable opens/creates a table file and returns Table
 func NewTable(name string, path string, schema *catalog.TableSchema) (*Table, error) {
 	p := NewPager(path)
-	return &Table{name: name, pager: p, schema: schema}, nil
+	return &Table{
+		name:    name,
+		pager:   p,
+		schema:  schema,
+		Indexes: make(map[string]*Index),
+	}, nil
 }
 
 // close underlying pager
@@ -25,24 +31,22 @@ func (t *Table) Close() error {
 }
 
 // InsertRow appends a row into last page or allocates a new page
-func (t *Table) InsertRow(values []any) (*TID, error) {
+func (t *Table) InsertRow(values []any) error {
 	data, err := rowcodec.EncodeRow(t.schema, values)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	numPages, err := t.pager.NumPages()
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	var page *Page
-	var pageID uint64
 	if numPages == 0 {
 		page = NewEmptyPage(0)
-		pageID = 0
 	} else {
-		pageID = numPages - 1
+		pageID := numPages - 1
 		pg, err := t.pager.ReadPage(pageID)
 		if err != nil {
 			page = NewEmptyPage(pageID)
@@ -51,29 +55,37 @@ func (t *Table) InsertRow(values []any) (*TID, error) {
 		}
 	}
 
-	// try to insert
-	if page.CanInsert(len(data)) {
-		slotID, err := page.InsertTouple(data, 0, TupleFlagNormal)
-		if err != nil {
-			return nil, err
-		}
-		if err := t.pager.WritePage(page); err != nil {
-			return nil, err
-		}
-		return &TID{PageID: pageID, SlotID: uint32(slotID)}, nil
+	if !page.CanInsert(len(data) + tupleHdrSize) {
+		newPageID := numPages
+		page = NewEmptyPage(newPageID)
 	}
 
-	// otherwise create new page
-	pageID = numPages
-	newPage := NewEmptyPage(pageID)
-	slotID, err := newPage.InsertTouple(data, 0, TupleFlagNormal)
+	// Insert row as tuple
+	slotID, err := page.InsertTouple(data, 0, TupleFlagNormal)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	if err := t.pager.WritePage(newPage); err != nil {
-		return nil, err
+
+	if err := t.pager.WritePage(page); err != nil {
+		return err
 	}
-	return &TID{PageID: pageID, SlotID: uint32(slotID)}, nil
+
+	// Build TID for this row
+	tid := TID{PageID: page.ID, SlotID: uint32(slotID)}
+
+	// Update indexes
+	for colName, idx := range t.Indexes {
+		colIdx, err := t.ResolveColumn(colName)
+		if err != nil {
+			continue
+		}
+		b, err := rowcodec.EncodeValue(t.schema, colIdx, values[colIdx])
+		if err := idx.Insert(b, tid); err != nil {
+			return fmt.Errorf("failed to insert into index %q: %v", colName, err)
+		}
+	}
+
+	return nil
 }
 
 // ReadAllRows iterates all pages and returns all rows in order
@@ -150,4 +162,42 @@ func (t *Table) GetTupleByTID(tid TID) (*Tuple, error) {
 		return nil, err
 	}
 	return pg.GetTuple(int(tid.SlotID))
+}
+
+func (t *Table) CreateIndex(name, column string) error {
+	colIdx := -1
+	for i, c := range t.schema.Columns {
+		if c.Name == column {
+			colIdx = i
+			break
+		}
+	}
+	if colIdx == -1 {
+		return fmt.Errorf("column %q does not exist", column)
+	}
+
+	pager := NewPager(fmt.Sprintf("data/%s_%s.idx", t.name, name))
+	idx, err := t.NewIndex(pager)
+	if err != nil {
+		return err
+	}
+	idx.Column = column
+	idx.Name = name
+
+	// populate index from existing rows
+	rows, _ := t.ReadAllRows()
+	for pageID, row := range rows {
+		tid := TID{PageID: 0, SlotID: uint32(pageID)} // simplification
+		b, err := rowcodec.EncodeValue(t.schema, colIdx, row[colIdx])
+		if err != nil {
+			return err
+		}
+		idx.Insert(b, tid)
+	}
+
+	if t.Indexes == nil {
+		t.Indexes = make(map[string]*Index)
+	}
+	t.Indexes[name] = idx
+	return nil
 }

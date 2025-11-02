@@ -12,7 +12,7 @@ func (s *InsertStmt) Execute(ex *Executor) (*ExecResult, error) {
 	if err != nil {
 		return nil, fmt.Errorf("table not found: %s", s.Table)
 	}
-	_, err = table.InsertRow(s.Values)
+	err = table.InsertRow(s.Values)
 	if err != nil {
 		return nil, err
 	}
