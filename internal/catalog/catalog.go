@@ -58,6 +58,22 @@ func (c *Catalog) GetTable(name string) (*TableSchema, error) {
 	return schema, nil
 }
 
+func (c *Catalog) CreateIndex(tableName string, indexName string, indexColumn string) error {
+	schema, ok := c.Tables[tableName]
+	if !ok {
+		return fmt.Errorf("table %s not found", tableName)
+	}
+	if _, exists := schema.Indexes[indexName]; exists {
+		return fmt.Errorf("index %s already exists on table %s", indexName, tableName)
+	}
+	schema.Indexes[indexName] = &Index{
+		Name:       indexName,
+		ColumnName: indexColumn,
+	}
+	c.save()
+	return nil
+}
+
 func (c *Catalog) ListTables() []string {
 	names := make([]string, 0, len(c.Tables))
 	for name := range c.Tables {

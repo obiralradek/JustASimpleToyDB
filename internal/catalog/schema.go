@@ -14,13 +14,11 @@ type Column struct {
 
 type TableSchema struct {
 	Name    string
-	Columns []Column
+	Columns []Column // TODO: change to map for cleaner lookup
+	Indexes map[string]*Index
 }
 
-func (s *TableSchema) ColumnNames() []string {
-	names := make([]string, len(s.Columns))
-	for i, c := range s.Columns {
-		names[i] = c.Name
-	}
-	return names
+type Index struct {
+	Name       string
+	ColumnName string
 }

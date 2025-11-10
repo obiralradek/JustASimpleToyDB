@@ -11,15 +11,9 @@ type CreateIndexStmt struct {
 }
 
 func (s *CreateIndexStmt) Execute(ex *Executor) (*ExecResult, error) {
-	// Check table exists
-	table, err := ex.engine.GetTable(s.TableName)
+	err := ex.engine.CreateIndex(s.TableName, s.Column, s.Name)
 	if err != nil {
-		return nil, fmt.Errorf("table not found: %s", s.TableName)
-	}
-
-	// Create index on the table
-	if err := table.CreateIndex(s.Name, s.Column); err != nil {
-		return nil, fmt.Errorf("failed to create index: %v", err)
+		return nil, fmt.Errorf("create index: %w", err)
 	}
 
 	return &ExecResult{

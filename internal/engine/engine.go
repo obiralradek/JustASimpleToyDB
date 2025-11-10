@@ -34,6 +34,20 @@ func (e *Engine) CreateTable(schema *catalog.TableSchema) error {
 	return nil
 }
 
+func (e *Engine) CreateIndex(tableName, columnName, indexName string) error {
+	if err := e.Catalog.CreateIndex(tableName, indexName, columnName); err != nil {
+		return fmt.Errorf("create index: %w", err)
+	}
+	table, err := e.GetTable(tableName)
+	if err != nil {
+		return fmt.Errorf("get table for index creation: %w", err)
+	}
+	if err := table.CreateIndex(indexName, columnName); err != nil {
+		return fmt.Errorf("create index: %w", err)
+	}
+	return nil
+}
+
 func (e *Engine) GetTable(name string) (*storage.Table, error) {
 	schema, err := e.Catalog.GetTable(name)
 	if err != nil {

@@ -11,6 +11,7 @@ func (s *CreateTableStmt) Execute(ex *Executor) (*ExecResult, error) {
 	schema := &catalog.TableSchema{
 		Name:    s.Name,
 		Columns: s.Columns,
+		Indexes: make(map[string]*catalog.Index),
 	}
 	err := ex.engine.CreateTable(schema)
 	if err != nil {
