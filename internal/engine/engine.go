@@ -21,6 +21,22 @@ func NewEngine(dataDir string) *Engine {
 	}
 }
 
+func (e *Engine) GetTable(name string) (*storage.Table, error) {
+	schema, err := e.Catalog.GetTable(name)
+	if err != nil {
+		return nil, fmt.Errorf("table %s not found in catalog: %w", name, err)
+	}
+
+	tablePath := filepath.Join(e.DataDir, name+".tbl")
+
+	table, err := storage.NewTable(name, tablePath, schema)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open table %s: %w", name, err)
+	}
+
+	return table, nil
+}
+
 func (e *Engine) CreateTable(schema *catalog.TableSchema) error {
 	if err := e.Catalog.CreateTable(schema); err != nil {
 		return fmt.Errorf("create table: %w", err)
@@ -42,24 +58,9 @@ func (e *Engine) CreateIndex(tableName, columnName, indexName string) error {
 	if err != nil {
 		return fmt.Errorf("get table for index creation: %w", err)
 	}
+	defer table.Close()
 	if err := table.CreateIndex(indexName, columnName); err != nil {
 		return fmt.Errorf("create index: %w", err)
 	}
 	return nil
-}
-
-func (e *Engine) GetTable(name string) (*storage.Table, error) {
-	schema, err := e.Catalog.GetTable(name)
-	if err != nil {
-		return nil, fmt.Errorf("table %s not found in catalog: %w", name, err)
-	}
-
-	tablePath := filepath.Join(e.DataDir, name+".tbl")
-
-	table, err := storage.NewTable(name, tablePath, schema)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open table %s: %w", name, err)
-	}
-
-	return table, nil
 }

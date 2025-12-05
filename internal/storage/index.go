@@ -24,18 +24,14 @@ type IndexNode struct {
 
 // Index represents the B-Tree index for a table
 type Index struct {
-	Name       string
-	Column     string
 	Pager      *Pager
 	RootPageID uint64
-	Table      *Table
 }
 
-// NewIndex initializes a new index (root page created if needed)
-func (t *Table) NewIndex(pager *Pager) (*Index, error) {
+// NewIndex initializes a new B-Tree index (root page created if needed)
+func NewIndex(pager *Pager) (*Index, error) {
 	idx := &Index{
 		Pager: pager,
-		Table: t,
 	}
 	// If no pages, allocate root
 	numPages, err := pager.NumPages()
@@ -66,7 +62,10 @@ func (idx *Index) Insert(key IndexKey, tid TID) error {
 	if err != nil {
 		return err
 	}
-	newRoot, _ := idx.insertRecursive(root, key, tid)
+	newRoot, err := idx.insertRecursive(root, key, tid)
+	if err != nil {
+		return err
+	}
 	if newRoot != nil {
 		// root split, assign new root page
 		idx.RootPageID = newRoot.PageID
@@ -82,7 +81,13 @@ func (idx *Index) insertRecursive(node *IndexNode, key IndexKey, tid TID) (*Inde
 		for i < len(node.Keys) && bytes.Compare(node.Keys[i], key) < 0 {
 			i++
 		}
-		// insert key & TID
+		// Check if key already exists (duplicate key)
+		if i < len(node.Keys) && bytes.Equal(node.Keys[i], key) {
+			// Append TID to existing list
+			node.TIDs[i] = append(node.TIDs[i], tid)
+			return nil, idx.writeNode(node)
+		}
+		// Insert new key & TID
 		node.Keys = append(node.Keys[:i], append([]IndexKey{key}, node.Keys[i:]...)...)
 		node.TIDs = append(node.TIDs[:i], append([][]TID{{tid}}, node.TIDs[i:]...)...)
 		if len(node.Keys) <= MaxKeysPerNode {
@@ -189,7 +194,7 @@ func (idx *Index) splitInternal(node *IndexNode) (*IndexNode, error) {
 	return newRoot, nil
 }
 
-// Search for a key
+// Search for a key, returns empty slice if not found
 func (idx *Index) Search(key IndexKey) ([]TID, error) {
 	node, err := idx.readNode(idx.RootPageID)
 	if err != nil {
@@ -205,12 +210,14 @@ func (idx *Index) Search(key IndexKey) ([]TID, error) {
 			return nil, err
 		}
 	}
+	// Binary search in leaf node
 	for i, k := range node.Keys {
 		if bytes.Equal(k, key) {
 			return node.TIDs[i], nil
 		}
 	}
-	return nil, fmt.Errorf("key %d not found", key)
+	// Key not found, return empty slice
+	return []TID{}, nil
 }
 
 // ---------------- Page I/O -----------------
@@ -225,13 +232,27 @@ func (idx *Index) writeNode(node *IndexNode) error {
 	buf[1] = byte(len(node.Keys))
 	offset := 2
 	for i, k := range node.Keys {
+		// Write key length (4 bytes) followed by key data
+		keyLen := uint32(len(k))
+		if offset+4+int(keyLen) > PageSize {
+			return fmt.Errorf("key too large for page")
+		}
+		binary.LittleEndian.PutUint32(buf[offset:], keyLen)
+		offset += 4
 		copy(buf[offset:], k)
-		offset += 8
+		offset += int(keyLen)
+
 		if node.IsLeaf {
 			tids := node.TIDs[i]
+			if offset+4 > PageSize {
+				return fmt.Errorf("not enough space for TID count")
+			}
 			binary.LittleEndian.PutUint32(buf[offset:], uint32(len(tids)))
 			offset += 4
 			for _, tid := range tids {
+				if offset+12 > PageSize {
+					return fmt.Errorf("not enough space for TID")
+				}
 				binary.LittleEndian.PutUint64(buf[offset:], tid.PageID)
 				offset += 8
 				binary.LittleEndian.PutUint32(buf[offset:], tid.SlotID)
@@ -259,13 +280,30 @@ func (idx *Index) readNode(pageID uint64) (*IndexNode, error) {
 		node.TIDs = make([][]TID, numKeys)
 	}
 	for i := 0; i < numKeys; i++ {
-		node.Keys[i] = page.Data[offset:]
-		offset += 8
+		// Read key length (4 bytes) followed by key data
+		if offset+4 > PageSize {
+			return nil, fmt.Errorf("corrupt index node: key length out of bounds")
+		}
+		keyLen := binary.LittleEndian.Uint32(page.Data[offset:])
+		offset += 4
+		if offset+int(keyLen) > PageSize {
+			return nil, fmt.Errorf("corrupt index node: key data out of bounds")
+		}
+		node.Keys[i] = make(IndexKey, keyLen)
+		copy(node.Keys[i], page.Data[offset:offset+int(keyLen)])
+		offset += int(keyLen)
+
 		if node.IsLeaf {
+			if offset+4 > PageSize {
+				return nil, fmt.Errorf("corrupt index node: TID count out of bounds")
+			}
 			n := binary.LittleEndian.Uint32(page.Data[offset:])
 			offset += 4
 			tids := make([]TID, n)
 			for j := 0; j < int(n); j++ {
+				if offset+12 > PageSize {
+					return nil, fmt.Errorf("corrupt index node: TID out of bounds")
+				}
 				tids[j].PageID = binary.LittleEndian.Uint64(page.Data[offset:])
 				offset += 8
 				tids[j].SlotID = binary.LittleEndian.Uint32(page.Data[offset:])

@@ -5,14 +5,17 @@ This is a practice project for designing and creating custom DB from scratch
 ## How to run
 
 Run the server with
+
 ```
 go run cmd/server/main.go
 ```
 
 Run the REPL session with
+
 ```
 go run cmd/repl/main.go
 ```
+
 With this you create a connection to the server where you can run commands like...
 
 ```
@@ -24,10 +27,10 @@ SELECT name FROM animals;
 SELECT id FROM animals WHERE name = "FROG";
 ```
 
-
 ## Design
 
 There are couple of directions I follow when designing this
+
 - Postgres-like
 - 16kB pages
 - multi-file storage

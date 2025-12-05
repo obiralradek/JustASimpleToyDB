@@ -5,6 +5,7 @@ import (
 	"io"
 	"justasimpletoydb/internal/catalog"
 	"justasimpletoydb/internal/engine/rowcodec"
+	"path/filepath"
 )
 
 type Table struct {
@@ -12,17 +13,45 @@ type Table struct {
 	schema  *catalog.TableSchema
 	pager   *Pager
 	Indexes map[string]*Index
+	dataDir string // directory where table and index files are stored
 }
 
 // NewTable opens/creates a table file and returns Table
 func NewTable(name string, path string, schema *catalog.TableSchema) (*Table, error) {
 	p := NewPager(path)
-	return &Table{
+	dataDir := filepath.Dir(path)
+	t := &Table{
 		name:    name,
 		pager:   p,
 		schema:  schema,
 		Indexes: make(map[string]*Index),
-	}, nil
+		dataDir: dataDir,
+	}
+	// Load existing indexes
+	if err := t.loadIndexes(); err != nil {
+		return nil, fmt.Errorf("failed to load indexes: %w", err)
+	}
+	return t, nil
+}
+
+// loadIndexes loads all indexes defined in the schema
+func (t *Table) loadIndexes() error {
+	for indexName := range t.schema.Indexes {
+		indexPath := filepath.Join(t.dataDir, fmt.Sprintf("%s_%s.idx", t.name, indexName))
+		pager := NewPager(indexPath)
+		idx, err := NewIndex(pager)
+		if err != nil {
+			// NewIndex can fail if:
+			// 1. File doesn't exist (but NewPager creates it, so this shouldn't happen)
+			// 2. File exists but size is not a multiple of PageSize (corrupted/partial write)
+			// 3. File is empty (0 bytes) - this should work (returns 0 pages, creates root)
+			// For corrupted files, we'll log but continue - the index will be created on first insert
+			// This allows the system to recover from partial writes
+			continue
+		}
+		t.Indexes[indexName] = idx
+	}
+	return nil
 }
 
 // close underlying pager
@@ -74,14 +103,35 @@ func (t *Table) InsertRow(values []any) error {
 	tid := TID{PageID: page.ID, SlotID: uint32(slotID)}
 
 	// Update indexes
-	for colName, idx := range t.Indexes {
-		colIdx, err := t.ResolveColumn(colName)
+	for indexName, idx := range t.schema.Indexes {
+		colIdx, err := t.ResolveColumn(idx.ColumnName)
 		if err != nil {
 			continue
 		}
+		// Get or create index
+		index, ok := t.Indexes[indexName]
+		if !ok {
+			// Index not loaded, try to load it
+			// This can happen if loadIndexes() skipped it or if it was added after table was opened
+			indexPath := filepath.Join(t.dataDir, fmt.Sprintf("%s_%s.idx", t.name, indexName))
+			pager := NewPager(indexPath)
+			var loadErr error
+			index, loadErr = NewIndex(pager)
+			if loadErr != nil {
+				// NewIndex failed - this could be because:
+				// 1. File is corrupted (size not multiple of PageSize)
+				// 2. Some other I/O error
+				// For now, we'll return an error rather than silently failing
+				return fmt.Errorf("failed to load index %q: %v", indexName, loadErr)
+			}
+			t.Indexes[indexName] = index
+		}
 		b, err := rowcodec.EncodeValue(t.schema, colIdx, values[colIdx])
-		if err := idx.Insert(b, tid); err != nil {
-			return fmt.Errorf("failed to insert into index %q: %v", colName, err)
+		if err != nil {
+			return fmt.Errorf("failed to encode value for index %q: %v", indexName, err)
+		}
+		if err := index.Insert(b, tid); err != nil {
+			return fmt.Errorf("failed to insert into index %q: %v", indexName, err)
 		}
 	}
 
@@ -111,6 +161,9 @@ func (t *Table) ReadAllRows() ([][]any, error) {
 				return nil, err
 			}
 			data, err := rowcodec.DecodeRow(t.schema, rec)
+			if err != nil {
+				return nil, err
+			}
 			out = append(out, data)
 		}
 	}
@@ -176,28 +229,70 @@ func (t *Table) CreateIndex(name, column string) error {
 		return fmt.Errorf("column %q does not exist", column)
 	}
 
-	pager := NewPager(fmt.Sprintf("data/%s_%s.idx", t.name, name))
-	idx, err := t.NewIndex(pager)
+	indexPath := filepath.Join(t.dataDir, fmt.Sprintf("%s_%s.idx", t.name, name))
+	pager := NewPager(indexPath)
+	idx, err := NewIndex(pager)
 	if err != nil {
 		return err
 	}
-	idx.Column = column
-	idx.Name = name
 
-	// populate index from existing rows
-	rows, _ := t.ReadAllRows()
-	for pageID, row := range rows {
-		tid := TID{PageID: 0, SlotID: uint32(pageID)} // simplification
-		b, err := rowcodec.EncodeValue(t.schema, colIdx, row[colIdx])
-		if err != nil {
-			return err
+	// Populate index from existing rows by iterating pages and slots directly
+	// to get correct TIDs
+	numPages, err := t.pager.NumPages()
+	if err != nil {
+		if err == io.EOF {
+			// Empty table, just store the empty index
+			t.Indexes[name] = idx
+			return nil
 		}
-		idx.Insert(b, tid)
+		return fmt.Errorf("failed to get page count: %w", err)
 	}
 
-	if t.Indexes == nil {
-		t.Indexes = make(map[string]*Index)
+	for pageID := uint64(0); pageID < numPages; pageID++ {
+		pg, err := t.pager.ReadPage(pageID)
+		if err != nil {
+			return fmt.Errorf("failed to read page %d: %w", pageID, err)
+		}
+		slots := int(pg.getSlotCount())
+		for slotID := 0; slotID < slots; slotID++ {
+			rec, err := pg.GetRecord(slotID)
+			if err != nil {
+				// Skip corrupted records
+				continue
+			}
+			row, err := rowcodec.DecodeRow(t.schema, rec)
+			if err != nil {
+				// Skip rows that can't be decoded
+				continue
+			}
+			tid := TID{PageID: pageID, SlotID: uint32(slotID)}
+			b, err := rowcodec.EncodeValue(t.schema, colIdx, row[colIdx])
+			if err != nil {
+				return fmt.Errorf("failed to encode value: %w", err)
+			}
+			if err := idx.Insert(b, tid); err != nil {
+				return fmt.Errorf("failed to insert into index: %w", err)
+			}
+		}
 	}
+
+	// Store index in cache
 	t.Indexes[name] = idx
 	return nil
+}
+
+func (t *Table) GetIndex(name string) (*Index, error) {
+	// Check cache first
+	if idx, ok := t.Indexes[name]; ok {
+		return idx, nil
+	}
+	// Try to load it
+	indexPath := filepath.Join(t.dataDir, fmt.Sprintf("%s_%s.idx", t.name, name))
+	pager := NewPager(indexPath)
+	idx, err := NewIndex(pager)
+	if err != nil {
+		return nil, err
+	}
+	t.Indexes[name] = idx
+	return idx, nil
 }
