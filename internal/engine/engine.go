@@ -21,47 +21,6 @@ func NewEngine(dataDir string) *Engine {
 	}
 }
 
-func (e *Engine) CreateTable(schema *catalog.TableSchema) error {
-	if err := e.Catalog.CreateTable(schema); err != nil {
-		return fmt.Errorf("create table: %w", err)
-	}
-	tablePath := filepath.Join(e.DataDir, schema.Name+".tbl")
-	table, err := storage.NewTable(schema.Name, tablePath, schema)
-	if err != nil {
-		return fmt.Errorf("create table file: %w", err)
-	}
-	defer table.Close()
-	return nil
-}
-
-func (e *Engine) InsertRow(tableName string, values []any) error {
-	schema, err := e.Catalog.GetTable(tableName)
-	if err != nil {
-		return err
-	}
-	tablePath := filepath.Join(e.DataDir, schema.Name+".tbl")
-	table, err := storage.NewTable(schema.Name, tablePath, schema)
-	if err != nil {
-		return err
-	}
-	defer table.Close()
-	return table.InsertRow(values)
-}
-
-func (e *Engine) SelectAll(tableName string) ([][]any, error) {
-	schema, err := e.Catalog.GetTable(tableName)
-	if err != nil {
-		return nil, err
-	}
-	tablePath := filepath.Join(e.DataDir, schema.Name+".tbl")
-	table, err := storage.NewTable(schema.Name, tablePath, schema)
-	if err != nil {
-		return nil, err
-	}
-	defer table.Close()
-	return table.ReadAllRows()
-}
-
 func (e *Engine) GetTable(name string) (*storage.Table, error) {
 	schema, err := e.Catalog.GetTable(name)
 	if err != nil {
@@ -76,4 +35,32 @@ func (e *Engine) GetTable(name string) (*storage.Table, error) {
 	}
 
 	return table, nil
+}
+
+func (e *Engine) CreateTable(schema *catalog.TableSchema) error {
+	if err := e.Catalog.CreateTable(schema); err != nil {
+		return fmt.Errorf("create table: %w", err)
+	}
+	tablePath := filepath.Join(e.DataDir, schema.Name+".tbl")
+	table, err := storage.NewTable(schema.Name, tablePath, schema)
+	if err != nil {
+		return fmt.Errorf("create table file: %w", err)
+	}
+	defer table.Close()
+	return nil
+}
+
+func (e *Engine) CreateIndex(tableName, columnName, indexName string) error {
+	if err := e.Catalog.CreateIndex(tableName, indexName, columnName); err != nil {
+		return fmt.Errorf("create index: %w", err)
+	}
+	table, err := e.GetTable(tableName)
+	if err != nil {
+		return fmt.Errorf("get table for index creation: %w", err)
+	}
+	defer table.Close()
+	if err := table.CreateIndex(indexName, columnName); err != nil {
+		return fmt.Errorf("create index: %w", err)
+	}
+	return nil
 }

@@ -20,9 +20,9 @@ type Page struct {
 func NewEmptyPage(id uint64) *Page {
 	buf := make([]byte, PageSize)
 	binary.LittleEndian.PutUint64(buf[0:8], id)
-	// dataEnd defaults to header size
 	binary.LittleEndian.PutUint32(buf[8:12], uint32(pageHdrSize))
-	// slotCount defaults to 0 -> bytes 12:16 zero
+	// slotCount already zero
+	binary.LittleEndian.PutUint16(buf[16:18], PageTypeHeap)
 	return &Page{ID: id, Data: buf}
 }
 
@@ -46,13 +46,6 @@ func (p *Page) setSlotCount(v uint32) {
 	binary.LittleEndian.PutUint32(p.Data[12:16], v)
 }
 
-func (p *Page) getFlags() uint16 {
-	return binary.LittleEndian.Uint16(p.Data[16:18])
-}
-func (p *Page) setFlags(v uint16) {
-	binary.LittleEndian.PutUint16(p.Data[16:18], v)
-}
-
 // Available free bytes for storing payload + one new slot entry
 func (p *Page) availableSpace() int {
 	dataEnd := int(p.getDataEnd())
@@ -65,11 +58,6 @@ func (p *Page) availableSpace() int {
 func (p *Page) CanInsert(n int) bool {
 	need := n + slotEntrySz
 	return need <= p.availableSpace()
-}
-
-// InsertRecord writes payload into page and creates new slot entry, returns slot index (0-based)
-func (p *Page) InsertRecord(payload []byte) (int, error) {
-	return p.InsertTouple(payload, 0, TupleFlagNormal)
 }
 
 // GetRecord returns record bytes for given slot index (0-based)

@@ -26,11 +26,15 @@ func DecodeRow(schema *catalog.TableSchema, data []byte) ([]any, error) {
 			if err := binary.Read(buf, binary.LittleEndian, &length); err != nil {
 				return nil, fmt.Errorf("decode length for %s: %v", col.Name, err)
 			}
-			strBytes := make([]byte, length)
-			if _, err := buf.Read(strBytes); err != nil {
-				return nil, fmt.Errorf("decode text for %s: %v", col.Name, err)
+			if length == 0 {
+				result[i] = ""
+			} else {
+				strBytes := make([]byte, length)
+				if _, err := buf.Read(strBytes); err != nil {
+					return nil, fmt.Errorf("decode text for %s: %v", col.Name, err)
+				}
+				result[i] = string(strBytes)
 			}
-			result[i] = string(strBytes)
 
 		default:
 			return nil, fmt.Errorf("unsupported type for column %s", col.Name)
