@@ -47,6 +47,7 @@ func (t *Table) loadIndexes() error {
 			// 3. File is empty (0 bytes) - this should work (returns 0 pages, creates root)
 			// For corrupted files, we'll log but continue - the index will be created on first insert
 			// This allows the system to recover from partial writes
+			pager.Close() // Close pager before continuing to avoid resource leak
 			continue
 		}
 		t.Indexes[indexName] = idx
@@ -122,6 +123,7 @@ func (t *Table) InsertRow(values []any) error {
 				// 1. File is corrupted (size not multiple of PageSize)
 				// 2. Some other I/O error
 				// For now, we'll return an error rather than silently failing
+				pager.Close() // Close pager before returning error to avoid resource leak
 				return fmt.Errorf("failed to load index %q: %v", indexName, loadErr)
 			}
 			t.Indexes[indexName] = index
@@ -233,6 +235,7 @@ func (t *Table) CreateIndex(name, column string) error {
 	pager := NewPager(indexPath)
 	idx, err := NewIndex(pager)
 	if err != nil {
+		pager.Close() // Close pager before returning error to avoid resource leak
 		return err
 	}
 
@@ -291,6 +294,7 @@ func (t *Table) GetIndex(name string) (*Index, error) {
 	pager := NewPager(indexPath)
 	idx, err := NewIndex(pager)
 	if err != nil {
+		pager.Close() // Close pager before returning error to avoid resource leak
 		return nil, err
 	}
 	t.Indexes[name] = idx
