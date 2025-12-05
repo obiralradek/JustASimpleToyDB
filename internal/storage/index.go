@@ -241,7 +241,7 @@ func (idx *Index) writeNode(node *IndexNode) error {
 		offset += 4
 		copy(buf[offset:], k)
 		offset += int(keyLen)
-
+		
 		if node.IsLeaf {
 			tids := node.TIDs[i]
 			if offset+4 > PageSize {
@@ -260,6 +260,23 @@ func (idx *Index) writeNode(node *IndexNode) error {
 			}
 		}
 	}
+	
+	// For internal nodes, write children after all keys
+	if !node.IsLeaf {
+		if offset+4 > PageSize {
+			return fmt.Errorf("not enough space for children count")
+		}
+		binary.LittleEndian.PutUint32(buf[offset:], uint32(len(node.Children)))
+		offset += 4
+		for _, childPageID := range node.Children {
+			if offset+8 > PageSize {
+				return fmt.Errorf("not enough space for child page ID")
+			}
+			binary.LittleEndian.PutUint64(buf[offset:], childPageID)
+			offset += 8
+		}
+	}
+	
 	page := &Page{ID: node.PageID, Data: buf}
 	return idx.Pager.WritePage(page)
 }
@@ -292,7 +309,7 @@ func (idx *Index) readNode(pageID uint64) (*IndexNode, error) {
 		node.Keys[i] = make(IndexKey, keyLen)
 		copy(node.Keys[i], page.Data[offset:offset+int(keyLen)])
 		offset += int(keyLen)
-
+		
 		if node.IsLeaf {
 			if offset+4 > PageSize {
 				return nil, fmt.Errorf("corrupt index node: TID count out of bounds")
@@ -312,5 +329,23 @@ func (idx *Index) readNode(pageID uint64) (*IndexNode, error) {
 			node.TIDs[i] = tids
 		}
 	}
+	
+	// For internal nodes, read children after all keys
+	if !node.IsLeaf {
+		if offset+4 > PageSize {
+			return nil, fmt.Errorf("corrupt index node: children count out of bounds")
+		}
+		numChildren := binary.LittleEndian.Uint32(page.Data[offset:])
+		offset += 4
+		node.Children = make([]uint64, numChildren)
+		for i := 0; i < int(numChildren); i++ {
+			if offset+8 > PageSize {
+				return nil, fmt.Errorf("corrupt index node: child page ID out of bounds")
+			}
+			node.Children[i] = binary.LittleEndian.Uint64(page.Data[offset:])
+			offset += 8
+		}
+	}
+	
 	return node, nil
 }
